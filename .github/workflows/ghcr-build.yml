@@ -66,7 +66,10 @@ jobs:
           test "$(docker run --rm "$TEST_TAG" php -r 'echo ini_get("session.upload_progress.enabled") ? "on" : "off";')" = off
           # Startup must not log PHP fatal errors or warnings
           docker run --rm --entrypoint sh "$TEST_TAG" -c \
-            'DEBUG=true /entrypoint.sh > /tmp/log 2>&1 & sleep 8; wget -q -O /dev/null http://127.0.0.1:8888/ && cat /tmp/log' > start.log
+            'DEBUG=true /entrypoint.sh > /tmp/log 2>&1 & sleep 8; wget -q -O /dev/null http://127.0.0.1:8888/ && cat /tmp/log && netstat -tln' > start.log
+          # php-fpm must only listen on loopback
+          grep -qE '127\.0\.0\.1:9000 ' start.log
+          if grep -E ':::9000 |0\.0\.0\.0:9000 ' start.log; then exit 1; fi
           if grep -iE 'PHP (Fatal|Parse|Warning)' start.log; then exit 1; fi
 
       - name: Push

@@ -21,7 +21,7 @@ commandTests:
           wget -S -T 3 -O /dev/null http://127.0.0.1:8888
           kill `pidof supervisord`
 metadataTest:
-  exposedPorts: ["8888", "9000"]
+  exposedPorts: ["8888"]
   volumes: ["/var/lib/snappymail"]
   entrypoint: []
   cmd: ["/entrypoint.sh"]

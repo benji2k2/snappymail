@@ -187,6 +187,5 @@ USER root
 WORKDIR /snappymail
 VOLUME /var/lib/snappymail
 EXPOSE 8888
-EXPOSE 9000
 ENTRYPOINT []
 CMD ["/entrypoint.sh"]
