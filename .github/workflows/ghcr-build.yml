@@ -1,0 +1,83 @@
+name: ghcr-build
+
+# Builds the Docker image from this fork and publishes it to ghcr.io/<owner>/snappymail.
+# Upstream builds images only for release tags, so the image there no longer gets a current PHP.
+# The weekly run rebuilds without cache to pick up a patched php base image and Alpine packages.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['**.md']
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ghcr-build
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/snappymail
+  TEST_TAG: snappymail:test
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: .docker/release/Dockerfile
+          platforms: linux/amd64
+          pull: true
+          no-cache: true
+          load: true
+          tags: ${{ env.TEST_TAG }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.description=SnappyMail (fork build, current PHP)
+            org.opencontainers.image.licenses=AGPL-3.0-only
+
+      - name: Test (upstream integration test)
+        run: .docker/release/test/test.sh "$TEST_TAG"
+
+      - name: Test (PHP version, extensions, settings)
+        run: |
+          set -eu
+          docker run --rm "$TEST_TAG" php -v
+          docker run --rm "$TEST_TAG" php -r 'exit(PHP_VERSION_ID >= 80400 ? 0 : 1);'
+          docker run --rm "$TEST_TAG" php -m > modules.txt
+          for m in apcu gd gnupg igbinary imagick intl ldap pdo_mysql pdo_pgsql redis tidy uuid xxtea zip 'Zend OPcache'; do
+            grep -qx "$m" modules.txt || { echo "missing PHP extension: $m"; exit 1; }
+          done
+          test "$(docker run --rm "$TEST_TAG" php -r 'echo ini_get("session.upload_progress.enabled") ? "on" : "off";')" = off
+          # Startup must not log PHP fatal errors or warnings
+          docker run --rm --entrypoint sh "$TEST_TAG" -c \
+            'DEBUG=true /entrypoint.sh > /tmp/log 2>&1 & sleep 8; wget -q -O /dev/null http://127.0.0.1:8888/ && cat /tmp/log' > start.log
+          if grep -iE 'PHP (Fatal|Parse|Warning)' start.log; then exit 1; fi
+
+      - name: Push
+        if: github.ref == 'refs/heads/master'
+        run: |
+          set -eu
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          PHP=$(docker run --rm "$TEST_TAG" php -r 'echo PHP_VERSION;')
+          SHORT=$(git rev-parse --short=9 HEAD)
+          for t in latest "$SHORT" "$SHORT-php$PHP"; do
+            docker tag "$TEST_TAG" "$IMAGE:$t"
+            docker push "$IMAGE:$t"
+          done
+          echo "Pushed $IMAGE:latest ($SHORT, PHP $PHP)" >> "$GITHUB_STEP_SUMMARY"

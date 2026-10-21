@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 
+ARG PHP_VERSION=8.4
+
 FROM alpine:3.18.5 AS builder
 RUN apk add --no-cache php82 php82-json php-phar php-zip
 RUN apk add --no-cache npm
@@ -23,7 +25,9 @@ RUN set -eux; \
     rm -v /snappymail/README.md /snappymail/_include.php
 
 # Inspired by the original Rainloop dockerfile from youtous on GitLab
-FROM php:8.2-fpm-alpine AS final
+# PHP 8.2 is end of life on 2026-12-31; 8.4 gets security fixes until 2028-12-31.
+# The builder stage above only packages the release and is not part of the final image.
+FROM php:${PHP_VERSION}-fpm-alpine AS final
 
 LABEL org.label-schema.description="SnappyMail webmail client image using nginx, php-fpm on Alpine"
 
