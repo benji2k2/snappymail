@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 
-ARG PHP_VERSION=8.4
+ARG PHP_VERSION=8.5
 
-FROM alpine:3.18.5 AS builder
-RUN apk add --no-cache php82 php82-json php-phar php-zip
+FROM alpine:3.24.3 AS builder
+RUN apk add --no-cache php85 php85-json php-phar php-zip
 RUN apk add --no-cache npm
 RUN npm install -g gulp yarn
 WORKDIR /source
@@ -25,8 +25,7 @@ RUN set -eux; \
     rm -v /snappymail/README.md /snappymail/_include.php
 
 # Inspired by the original Rainloop dockerfile from youtous on GitLab
-# PHP 8.2 is end of life on 2026-12-31; 8.4 gets security fixes until 2028-12-31.
-# The builder stage above only packages the release and is not part of the final image.
+# Same PHP as upstream (8.5, opcache built in); override with --build-arg PHP_VERSION=8.4 if needed.
 FROM php:${PHP_VERSION}-fpm-alpine AS final
 
 LABEL org.label-schema.description="SnappyMail webmail client image using nginx, php-fpm on Alpine"
@@ -103,9 +102,6 @@ RUN set -eux; \
 # mysql
 RUN docker-php-ext-install pdo_mysql
 
-# opcache
-RUN docker-php-ext-install opcache
-
 # postgres
 RUN set -eux; \
     apk add --no-cache postgresql-libs; \
@@ -124,6 +120,13 @@ RUN set -eux; \
     docker-php-ext-enable redis; \
     docker-php-source delete; \
     apk del .build-dependencies; \
+    apk del .deps
+
+# sqlite
+RUN set -eux; \
+    apk add --no-cache sqlite-libs; \
+    apk add --no-cache --virtual .deps sqlite-dev; \
+    docker-php-ext-install pdo_sqlite; \
     apk del .deps
 
 # tidy

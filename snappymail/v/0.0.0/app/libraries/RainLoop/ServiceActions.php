@@ -281,7 +281,7 @@ class ServiceActions
 		$sData = empty($this->aPaths[1]) ? '' : $this->aPaths[1];
 		if ($sData
 		  && $this->Config()->Get('labs', 'use_local_proxy_for_external_images', false)
-		  && $this->oActions->getAccountFromToken()
+		  && $this->oActions->getMainAccountFromToken()
 		) {
 			$this->oActions->verifyCacheByKey($sData);
 			$sUrl = \MailSo\Base\Utils::UrlSafeBase64Decode($sData);
@@ -339,7 +339,7 @@ class ServiceActions
 					$sMethodName = 'Raw'.$sAction;
 					if (\method_exists($this->oActions, $sMethodName)) {
 						\header('X-Raw-Action: '.$sMethodName);
-						\header('Content-Security-Policy: script-src \'none\'; child-src \'none\'');
+						\header('Content-Security-Policy: script-src \'none\'; child-src \'none\'; object-src \'none\'');
 
 						$sRawError = '';
 						$this->oActions->SetActionParams(array(
@@ -542,7 +542,7 @@ class ServiceActions
 	}
 
 	/**
-	 * Login with the \RainLoop\API::CreateUserSsoHash() generated hash
+	 * Login with the \RainLoop\Api::CreateUserSsoHash() generated hash
 	 */
 	public function ServiceSso() : string
 	{

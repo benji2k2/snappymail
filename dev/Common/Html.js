@@ -312,7 +312,8 @@ export const
 			// https://github.com/the-djmaze/snappymail/issues/1860
 			.replace(/<(\/?)x-html(\s[^>]*)?>/gi, '')
 			.replace(/<(\/?)head(\s[^>]*)?>/gi, '')
-			.replace(/<(\/?)body(\s[^>]*)?>/gi, '<$1div class="mail-body"$2>')
+			.replace(/<body(\s[^>]*)?>/i, '<div class="mail-body"$1>')
+			.replace(/<(\/?)body(\s[^>]*)?>/gi, '<$1div$2>')
 //			.replace(/<\/?(html|head)[^>]*>/gi, '')
 			// Fix Reddit https://github.com/the-djmaze/snappymail/issues/540
 			.replace(/<span class="preview-text"[\s\S]+?<\/span>/, '')
@@ -628,9 +629,10 @@ export const
 				}
 
 				// https://github.com/the-djmaze/snappymail/issues/1082
-				if (minFontSize > pInt(oStyle.fontSize)) {
+				// Use getComputedStyle?
+				if (oStyle.fontSize && minFontSize > pInt(oStyle.fontSize)) {
 					oStyle.fontSize = minFontSize + "px";
-//					oStyle.removeProperty('font-size');
+//					oStyle.setProperty('font-size', minFontSize + "px");
 				}
 
 				// Removes background and color

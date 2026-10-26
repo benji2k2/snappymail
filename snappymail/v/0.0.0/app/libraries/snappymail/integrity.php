@@ -57,6 +57,7 @@ abstract class Integrity
 */
 			echo "<h3>gzip encoded</h3>";
 			$response = $HTTP->doRequest('HEAD', $uri . $file . '.gz');
+//			$response = $HTTP->doRequest('HEAD', $uri . $file, null, ['Accept-Encoding: gzip']);
 			echo '<details><summary>Status: ' . $response->status . '</summary><pre>' . \print_r($response->headers, 1) . '</pre></details>';
 			$size = \filesize(APP_VERSION_ROOT_PATH.$file . '.gz');
 			if ($size == intval($response->getHeader('content-length'))) {
@@ -71,7 +72,8 @@ abstract class Integrity
 			}
 
 			echo "<h3>brotli encoded</h3>";
-			$response = $HTTP->doRequest('HEAD', $uri . $file . '.br');
+			$response = $HTTP->doRequest('HEAD', $uri . $file, null, ['Accept-Encoding: br']);
+//			$response = $HTTP->doRequest('HEAD', $uri . $file . '.br');
 			echo '<details><summary>Status: ' . $response->status . '</summary><pre>' . \print_r($response->headers, 1) . '</pre></details>';
 			$size = \filesize(APP_VERSION_ROOT_PATH.$file . '.br');
 			if ($size == intval($response->getHeader('content-length'))) {
@@ -89,8 +91,8 @@ abstract class Integrity
 
 	public static function phpVersion()
 	{
-		if (PHP_VERSION_ID < 70400) {
-			return 'Your PHP version ('.PHP_VERSION.') is lower than the minimal required 7.4.0!';
+		if (PHP_VERSION_ID < 80200) {
+			return 'Your PHP version ('.PHP_VERSION.') is lower than the minimal required 8.2.0!';
 		}
 	}
 
