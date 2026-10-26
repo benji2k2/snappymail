@@ -2,7 +2,10 @@ name: ghcr-build
 
 # Builds the Docker image from this fork and publishes it to ghcr.io/<owner>/snappymail.
 # Upstream builds images only for release tags, so the image there no longer gets a current PHP.
-# The weekly run rebuilds without cache to pick up a patched php base image and Alpine packages.
+# The weekly run first merges upstream master (conflict -> red run, nothing pushed), then rebuilds
+# without cache to pick up a patched php base image, Alpine packages and PECL extensions.
+# A new image is only published when its content changed (source tree, packages, PHP and extension
+# versions); otherwise Watchtower/HA would report a weekly "update" without content.
 
 on:
   push:
@@ -11,9 +14,14 @@ on:
   schedule:
     - cron: '23 4 * * 1'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish the image even if nothing changed'
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -23,6 +31,7 @@ concurrency:
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/snappymail
   TEST_TAG: snappymail:test
+  UPSTREAM: https://github.com/the-djmaze/snappymail.git
 
 jobs:
   build:
@@ -31,6 +40,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream master
+        id: sync
+        if: github.event_name != 'push'
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags "$UPSTREAM" master
+          before=$(git rev-parse HEAD)
+          git merge --no-edit -m "Merge upstream master ($(date -u +%Y-%m-%d))" FETCH_HEAD
+          if [ "$(git rev-parse HEAD)" != "$before" ]; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            echo "Upstream merged: $(git rev-list --count "$before"..FETCH_HEAD) new commits" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Version
         id: meta
@@ -38,7 +64,7 @@ jobs:
           set -eu
           v=$(jq -r .version package.json)
           echo "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "unexpected version: $v"; exit 1; }
-          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "version=$v-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -53,12 +79,6 @@ jobs:
           no-cache: true
           load: true
           tags: ${{ env.TEST_TAG }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
-            org.opencontainers.image.description=SnappyMail (fork build, current PHP)
-            org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Test (upstream integration test)
         run: .docker/release/test/test.sh "$TEST_TAG"
@@ -73,7 +93,6 @@ jobs:
             grep -qx "$m" modules.txt || { echo "missing PHP extension: $m"; exit 1; }
           done
           test "$(docker run --rm "$TEST_TAG" php -r 'echo ini_get("session.upload_progress.enabled") ? "on" : "off";')" = off
-          test "$(docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$TEST_TAG")" = "${{ steps.meta.outputs.version }}"
           # Startup must not log PHP fatal errors or warnings
           docker run --rm --entrypoint sh "$TEST_TAG" -c \
             'DEBUG=true /entrypoint.sh > /tmp/log 2>&1 & sleep 8; wget -q -O /dev/null http://127.0.0.1:8888/ && cat /tmp/log && netstat -tln' > start.log
@@ -82,15 +101,53 @@ jobs:
           if grep -E ':::9000 |0\.0\.0\.0:9000 ' start.log; then exit 1; fi
           if grep -iE 'PHP (Fatal|Parse|Warning)' start.log; then exit 1; fi
 
-      - name: Push
-        if: github.ref == 'refs/heads/master'
+      - name: Content key
+        id: key
         run: |
           set -eu
+          # what ends up in the image: source tree (without CI/docs), Alpine packages, PHP and extension versions
+          tree=$(git ls-tree -r HEAD | awk -F'\t' '$2 !~ /^\.github\// && $2 !~ /\.md$/' | sha256sum | cut -c1-40)
+          pkgs=$(docker run --rm --entrypoint sh "$TEST_TAG" -c \
+            'apk info -v 2>/dev/null | sort; php -r "foreach (get_loaded_extensions() as \$e) echo \$e, \" \", phpversion(\$e), PHP_EOL;" | sort; php -r "echo PHP_VERSION;"' \
+            | sha256sum | cut -c1-40)
+          key=$(printf '%s %s' "$tree" "$pkgs" | sha256sum | cut -c1-16)
+          old=$(docker buildx imagetools inspect "$IMAGE:latest" --format '{{json .Image}}' 2>/dev/null \
+                | jq -r '.config.Labels["snappymail.key"] // empty' || true)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          if [ "$key" != "$old" ] || [ "${{ inputs.force }}" = "true" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Content key $key (published: ${old:-none})" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push merged master
+        if: steps.sync.outputs.merged == 'true' && github.ref == 'refs/heads/master'
+        run: git push origin HEAD:master
+
+      - name: Publish
+        if: steps.key.outputs.publish == 'true' && github.ref == 'refs/heads/master'
+        run: |
+          set -eu
+          # labels only: adds metadata to the tested image, no new layers
+          echo "FROM $TEST_TAG" | docker build --pull=false -t snappymail:release \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.revision=$(git rev-parse HEAD) \
+            --label org.opencontainers.image.version=${{ steps.meta.outputs.version }} \
+            --label org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --label "org.opencontainers.image.description=SnappyMail (fork build, current PHP)" \
+            --label org.opencontainers.image.licenses=AGPL-3.0-only \
+            --label snappymail.key=${{ steps.key.outputs.key }} -
+          test "$(docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.version" }}' snappymail:release)" = "${{ steps.meta.outputs.version }}"
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          PHP=$(docker run --rm "$TEST_TAG" php -r 'echo PHP_VERSION;')
+          PHP=$(docker run --rm snappymail:release php -r 'echo PHP_VERSION;')
           SHORT=$(git rev-parse --short=9 HEAD)
-          for t in latest "$SHORT" "$SHORT-php$PHP"; do
-            docker tag "$TEST_TAG" "$IMAGE:$t"
+          for t in latest "${{ steps.meta.outputs.version }}" "$SHORT-php$PHP"; do
+            docker tag snappymail:release "$IMAGE:$t"
             docker push "$IMAGE:$t"
           done
-          echo "Pushed $IMAGE:latest ($SHORT, PHP $PHP)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pushed $IMAGE:${{ steps.meta.outputs.version }} ($SHORT, PHP $PHP)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Nothing changed
+        if: steps.key.outputs.publish != 'true'
+        run: echo "No change - no new image." >> "$GITHUB_STEP_SUMMARY"
