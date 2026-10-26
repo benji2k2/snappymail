@@ -1,7 +1,5 @@
 # syntax=docker/dockerfile:1
 
-ARG PHP_VERSION=8.5
-
 FROM alpine:3.24.3 AS builder
 RUN apk add --no-cache php85 php85-json php-phar php-zip
 RUN apk add --no-cache npm
@@ -25,8 +23,7 @@ RUN set -eux; \
     rm -v /snappymail/README.md /snappymail/_include.php
 
 # Inspired by the original Rainloop dockerfile from youtous on GitLab
-# Same PHP as upstream (8.5, opcache built in); override with --build-arg PHP_VERSION=8.4 if needed.
-FROM php:${PHP_VERSION}-fpm-alpine AS final
+FROM php:8.5-fpm-alpine AS final
 
 LABEL org.label-schema.description="SnappyMail webmail client image using nginx, php-fpm on Alpine"
 
@@ -190,5 +187,6 @@ USER root
 WORKDIR /snappymail
 VOLUME /var/lib/snappymail
 EXPOSE 8888
+EXPOSE 9000
 ENTRYPOINT []
 CMD ["/entrypoint.sh"]
