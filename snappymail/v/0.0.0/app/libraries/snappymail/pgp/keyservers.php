@@ -28,6 +28,7 @@ abstract class Keyservers
 		'https://pool.sks-keyservers.net',
 		'https://keys.mailvelope.com',
 		'https://keyserver.ubuntu.com',
+		'hkps://openpgpkeyserver.com',
 */
 	];
 
@@ -176,7 +177,7 @@ abstract class Keyservers
 	 * Sends a PGP public key to a public keyserver.
 	 *
 	 * @param string $host
-	 * @param mixed $key  The PGP public key.
+	 * @param string $key  The PGP public key.
 	 *
 	 * @throws Exception
 	 */
@@ -196,21 +197,35 @@ abstract class Keyservers
 */
 	}
 
-	/** https://wiki.gnupg.org/WKD */
-	public static function wkd(string $host, string $keyid)
+	/**
+	 * https://wiki.gnupg.org/WKD
+	 * An example: https://snappymail.eu/.well-known/openpgpkey/hu/i4cdqgcarfjdjnba6y4jnf498asg8c6p
+	 * is the direct method URL for "releases@snappymail.eu"
+	 * gpg --with-wkd-hash --fingerprint releases@snappymail.eu
+	 * gpg --no-armor --export releases@snappymail.eu > i4cdqgcarfjdjnba6y4jnf498asg8c6p
+     */
+	public static function wkd(string $emailAddress): string|false
 	{
-/*
-		"https://{$host}/.well-known/openpgpkey/hu/{$keyid}";
-		/** https://wiki.gnupg.org/WKD
-			DNS:
-				openpgpkey.example.org. 300     IN      CNAME   wkd.keys.openpgp.org.
+		$parts = \explode('@', $emailAddress);
+		$host = \array_pop($parts);
+		$localPart = \implode('@', $parts);
+		$b32 = new \SnappyMail\Base32('ybndrfg8ejkmcpqxot1uwisza345h769');
+		$keyid = $b32->encode(\sha1($localPart, true));
 
-			https://openpgpkey.example.com/.well-known/openpgpkey/example.com/hu/
-			else       https://example.com/.well-known/openpgpkey/hu/
+		$oResponse = static::HTTP()->doRequest('GET', "https://openpgpkey.{$host}/.well-known/openpgpkey/{$host}/hu/{$keyid}");
+		if (!$oResponse || 200 !== $oResponse->status) {
+			$oResponse = static::HTTP()->doRequest('GET', "https://{$host}/.well-known/openpgpkey/hu/{$keyid}");
+		}
+		if (!$oResponse) {
+			\SnappyMail\Log::info('PGP', "No response for WKD key {$keyId} on {$host}");
+			return false;
+		}
+		if (200 !== $oResponse->status) {
+			\SnappyMail\Log::debug('PGP', "{$oResponse->status} for WKD key {$keyId} on {$host}");
+			return false;
+		}
 
-			An example: https://example.com/.well-known/openpgpkey/hu/it5sewh54rxz33fwmr8u6dy4bbz8itz4
-			is the direct method URL for "bernhard.reiter@example.com"
-		*/
+		return $oResponse->body;
 	}
 
 	public static function dns(string $host, string $keyid)

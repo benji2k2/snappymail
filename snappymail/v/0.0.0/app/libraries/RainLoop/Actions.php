@@ -167,10 +167,7 @@ class Actions
 		return $this->oConfig;
 	}
 
-	/**
-	 * @return mixed
-	 */
-	protected function fabrica(string $sName, ?Model\Account $oAccount = null)
+	protected function fabrica(string $sName, ?Model\Account $oAccount = null): mixed
 	{
 		$mResult = null;
 		$this->oPlugins->RunHook('main.fabrica', array($sName, &$mResult), false);
@@ -603,7 +600,7 @@ class Actions
 						'SoundNotification' => true,
 						'NotificationSound' => 'new-mail',
 						'DesktopNotifications' => true,
-						'Layout' => (int) $oConfig->Get('defaults', 'view_layout', Enumerations\Layout::SIDE_PREVIEW),
+						'Layout' => (int) $oConfig->Get('defaults', 'view_layout', Enumerations\Layout::SIDE_PREVIEW->value),
 						'EditorDefaultType' => \str_replace('Forced', '', $oConfig->Get('defaults', 'view_editor_type', '')),
 						'editorWysiwyg' => 'Squire',
 						'UseCheckboxesInList' => (bool) $oConfig->Get('defaults', 'view_use_checkboxes', true),
@@ -738,11 +735,7 @@ class Actions
 					$aResult['DevPassword'] = '';
 				}
 
-				$aResult['signMe'] = [
-					SignMeType::DefaultOff => 0,
-					SignMeType::DefaultOn => 1,
-					SignMeType::Unused => 2
-				][(string) $oConfig->Get('login', 'sign_me_auto', SignMeType::DefaultOff)];
+				$aResult['signMe'] = (SignMeType::tryFrom($oConfig->Get('login', 'sign_me_auto', '')) ?: SignMeType::DefaultOff)->toInt();
 			}
 		}
 
@@ -781,6 +774,12 @@ class Actions
 
 		$aResult['StaticLibsJs'] = Utils::WebStaticPath('js/' . ($bAppJsDebug ? '' : 'min/') .
 			'libs' . ($bAppJsDebug ? '' : '.min') . '.js');
+
+		if (!$bAppJsDebug) {
+			$aSri = \SnappyMail\Integrity::loadSriHashes();
+			$aResult['StaticLibsJsSri'] = $aSri['libs.min.js'] ?? '';
+			$aResult['StaticAppJsSri'] = $aSri[($bAdmin ? 'admin' : 'app') . '.min.js'] ?? '';
+		}
 
 		$this->oPlugins->InitAppData($bAdmin, $aResult, $oAccount);
 
@@ -958,12 +957,7 @@ class Actions
 		return $this;
 	}
 
-	/**
-	 * @param mixed $mDefault = null
-	 *
-	 * @return mixed
-	 */
-	public function GetActionParam(string $sKey, $mDefault = null)
+	public function GetActionParam(string $sKey, mixed $mDefault = null): mixed
 	{
 		return isset($this->aCurrentActionParams[$sKey]) ?
 			$this->aCurrentActionParams[$sKey] : $mDefault;
