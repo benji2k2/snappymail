@@ -69,7 +69,7 @@ class Application extends \RainLoop\Config\AbstractConfig
 		$mResult = parent::Get($sSection, $sName, $mDefault);
 		if ($this->aReplaceEnv && \is_string($mResult)) {
 			$sKey = \strtolower($sSection.'.'.$sName);
-			if (\in_array($sKey, $this->aReplaceEnv) && false !== strpos($mResult, '$')) {
+			if (\in_array($sKey, $this->aReplaceEnv) && \str_contains($mResult, '$')) {
 				$mResult = \preg_replace_callback('/\$([^\s]+)/', function($aMatch) {
 					if (!empty($aMatch[0]) && !empty($aMatch[1])) {
 						if (!empty($_ENV[$aMatch[1]])) {
@@ -395,6 +395,10 @@ Examples:
 				'auth_logging_format' => array('[{date:Y-m-d H:i:s}] Auth failed: ip={request:ip} user={imap:login} host={imap:host} port={imap:port}'),
 				'auth_syslog' => array(false, 'Enable auth logging to syslog for fail2ban'),
 
+				'syslog_ident' => array('snappymail', 'Name this instance reports to syslog and authpriv.
+Set it per instance when more than one runs on a host, otherwise their entries are
+indistinguishable. Also the name a fail2ban filter matches on.'),
+
 				'json_response_write_limit' => array(300),
 			),
 
@@ -444,9 +448,9 @@ Enables caching in the system'),
 				'folders_spec_limit' => array(50),
 				'curl_proxy' => array(''),
 				'curl_proxy_auth' => array(''),
+				'curl_verify_peer' => array(true),
 				'custom_login_link' => array(''),
 				'custom_logout_link' => array(''),
-				'http_client_ip_check_proxy' => array(false),
 				'use_local_proxy_for_external_images' => array(true),
 				'image_exif_auto_rotate' => array(false),
 				'cookie_default_path' => array(''),

@@ -80,7 +80,7 @@ class Manager
 				->SetName($sName)
 				->SetPath(static::getPluginPath($sName))
 				->SetPluginManager($this)
-				->SetPluginConfig(new \RainLoop\Config\Plugin($sName, $oPlugin->ConfigMap(true)))
+				->SetPluginConfig(new \RainLoop\Config\Plugin($sName, [...$oPlugin->ConfigProperties()]))
 			;
 			if (\method_exists($oPlugin, 'SetLogger')) {
 				$oPlugin->SetLogger($this->oLogger);
@@ -159,8 +159,8 @@ class Manager
 			\array_reduce($this->aPlugins, function($sResult, $oPlugin){
 				return $sResult . "|{$oPlugin->Hash()}";
 			}, APP_VERSION)
-			.implode('',$this->aJs[1]).implode('',$this->aJs[0])
-			.implode('',$this->aCss[1]).implode('',$this->aCss[0])
+			. \implode('', $this->aJs[1]) . \implode('', $this->aJs[0])
+			. \implode('', $this->aCss[1]) . \implode('', $this->aCss[0])
 		);
 	}
 
@@ -229,15 +229,13 @@ class Manager
 			foreach ($this->aPlugins as $oPlugin) {
 				if ($oPlugin) {
 					$aConfig = array();
-					$aMap = $oPlugin->ConfigMap(true);
-					if (\is_array($aMap)) {
-						foreach ($aMap as /* @var $oPluginProperty \RainLoop\Plugins\Property */ $oPluginProperty) {
-							if ($oPluginProperty && $oPluginProperty->AllowedInJs()) {
-								$aConfig[$oPluginProperty->Name()] =
-									$oPlugin->Config()->Get('plugin',
-										$oPluginProperty->Name(),
-										$oPluginProperty->DefaultValue());
-							}
+					/* @var $oPluginProperty \RainLoop\Plugins\Property */
+					foreach ($oPlugin->ConfigProperties() as $oPluginProperty) {
+						if ($oPluginProperty && $oPluginProperty->AllowedInJs()) {
+							$aConfig[$oPluginProperty->Name()] =
+								$oPlugin->Config()->Get('plugin',
+									$oPluginProperty->Name(),
+									$oPluginProperty->DefaultValue());
 						}
 					}
 

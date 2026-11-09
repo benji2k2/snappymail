@@ -221,21 +221,21 @@ abstract class Utils
 		$sValue = \preg_replace('/[\r\n\t]+/m', ' ', $sValue);
 
 		$aEncodeArray = array('');
-		$aMatch = array();
-//		\preg_match_all('/=\?[^\?]+\?[q|b|Q|B]\?[^\?]*?\?=/', $sValue, $aMatch);
-		\preg_match_all('/=\?[^\?]+\?[q|b|Q|B]\?.*?\?=/', $sValue, $aMatch);
+//		\preg_match_all('/=\?[^\?]+\?[q|b|Q|B]\?[^\?]*?\?=/', $sValue, $aEncodeArray);
+		\preg_match_all('/=\?[^\?]+\?[q|b|Q|B]\?.*?\?=/', $sValue, $aEncodeArray);
 
-		if (isset($aMatch[0]) && \is_array($aMatch[0])) {
-			for ($iIndex = 0, $iLen = \count($aMatch[0]); $iIndex < $iLen; ++$iIndex) {
-				if (isset($aMatch[0][$iIndex])) {
-					$iPos = \strpos($aMatch[0][$iIndex], '*');
+		if (isset($aEncodeArray[0]) && \is_array($aEncodeArray[0])) {
+			$aEncodeArray = \array_unique($aEncodeArray[0]);
+			for ($iIndex = 0, $iLen = \count($aEncodeArray); $iIndex < $iLen; ++$iIndex) {
+				if (isset($aEncodeArray[$iIndex])) {
+					$iPos = \strpos($aEncodeArray[$iIndex], '*');
 					if (false !== $iPos) {
-						$aMatch[0][$iIndex][0] = \substr($aMatch[0][$iIndex][0], 0, $iPos);
+						$aEncodeArray[$iIndex][0] = \substr($aEncodeArray[$iIndex][0], 0, $iPos);
 					}
 				}
 			}
-
-			$aEncodeArray = $aMatch[0];
+		} else {
+			$aEncodeArray = [];
 		}
 
 		$aParts = array();
@@ -300,7 +300,11 @@ abstract class Utils
 			$sValue = static::ConvertEncoding($sValue, $sMainCharset, Enumerations\Charset::UTF_8);
 		}
 
-		return $sValue;
+		// The strip above runs before decoding, so an encoded-word such as
+		// =?utf-8?b?...?= can still decode to a CR or LF. A decoded header value
+		// is one line; a line break here would be carried into the headers of a
+		// reply (In-Reply-To is copied from Message-ID) and inject new ones.
+		return \preg_replace('/[\r\n\0]+/', ' ', $sValue);
 	}
 
 	public static function RemoveHeaderFromHeaders(string $sIncHeaders, array $aHeadersToRemove = array()) : string
@@ -409,26 +413,12 @@ abstract class Utils
 		return \trim($sValue);
 	}
 
-	/**
-	 * @deprecated use getEmailAddressLocalPart
-	 */
-	public static function GetAccountNameFromEmail(string $sEmail) : string
-	{
-		return static::getEmailAddressLocalPart($sEmail);
-	}
 	public static function getEmailAddressLocalPart(string $sEmail) : string
 	{
 		$iPos = \strrpos($sEmail, '@');
 		return (false === $iPos) ? $sEmail : \substr($sEmail, 0, $iPos);
 	}
 
-	/**
-	 * @deprecated use getEmailAddressDomain
-	 */
-	public static function GetDomainFromEmail(string $sEmail) : string
-	{
-		return static::getEmailAddressDomain($sEmail);
-	}
 	public static function getEmailAddressDomain(string $sEmail) : string
 	{
 		$iPos = \strrpos($sEmail, '@');
@@ -467,7 +457,7 @@ abstract class Utils
 		if (null === $bValidateAction) {
 			$iResetTimer = 0;
 
-			$bValidateAction = static::FunctionCallable('set_time_limit');
+			$bValidateAction = \function_exists('set_time_limit');
 		}
 
 		if ($bValidateAction && $iTimeToReset < $iTime - $iResetTimer) {
@@ -657,26 +647,11 @@ abstract class Utils
 	public static function FunctionsCallable(array $aFunctionNames) : bool
 	{
 		foreach ($aFunctionNames as $sFunctionName) {
-			if (!static::FunctionCallable($sFunctionName)) {
+			if (!\function_exists($sFunctionName)) {
 				return false;
 			}
 		}
 		return true;
-	}
-
-	private static $disabled_functions = null;
-	public static function FunctionCallable(string $sFunctionName) : bool
-	{
-		if (null === static::$disabled_functions) {
-			static::$disabled_functions = \array_map('trim', \explode(',', \ini_get('disable_functions')));
-		}
-/*
-		$disabled_classes = \explode(',', \ini_get('disable_classes'));
-		\in_array($function, $disabled_classes);
-*/
-		return \function_exists($sFunctionName)
-			&& !\in_array($sFunctionName, static::$disabled_functions);
-//			&& \is_callable($mFunctionNameOrNames);
 	}
 
 	public static function Sha1Rand(string $sAdditionalSalt = '') : string
@@ -689,45 +664,16 @@ abstract class Utils
 		return !empty($sIp) && $sIp === \filter_var($sIp, FILTER_VALIDATE_IP);
 	}
 
-	/**
-	 * @deprecated
-	 */
-	public static function IdnToUtf8(string $sStr) : string
-	{
-		$trace = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2)[1];
-		\SnappyMail\Log::warning('MailSo', "Deprecated function IdnToUtf8 called at {$trace['file']}#{$trace['line']}");
-		if (\preg_match('/(^|\.|@)xn--/i', $sStr)) {
-			$sStr = \str_contains($sStr, '@')
-			? \SnappyMail\IDN::emailToUtf8($string)
-			: \idn_to_utf8($string);
-		}
-		return $sStr;
-	}
-
-	/**
-	 * @deprecated
-	 */
-	public static function IdnToAscii(string $sStr, bool $bLowerCase = false) : string
-	{
-		$trace = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2)[1];
-		\SnappyMail\Log::warning('MailSo', "Deprecated function IdnToAscii called at {$trace['file']}#{$trace['line']}");
-		$aParts = \explode('@', $sStr);
-		$sDomain = \array_pop($aParts);
-		if (\preg_match('/[^\x20-\x7E]/', $sDomain)) {
-			$sDomain = \idn_to_ascii($string);
-		}
-		if ($bLowerCase) {
-			$sDomain = \strtolower($sDomain);
-		}
-		$aParts[] = $sDomain;
-		return \implode('@', $aParts);
-	}
-
 	public static function mkdir(string $directory) : void
 	{
+		\clearstatcache();
 		if (!\is_dir($directory)) {
 			if (!\mkdir($directory, 0700, true)) {
-				throw new \RuntimeException("Failed to create directory {$directory}");
+				// Another request may create it concurrently, so only fail when it still doesn't exist
+				\clearstatcache();
+				if (!\is_dir($directory)) {
+					throw new \RuntimeException("Failed to create directory {$directory}");
+				}
 			}
 			\clearstatcache();
 		}

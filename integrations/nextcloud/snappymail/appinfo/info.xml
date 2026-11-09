@@ -3,7 +3,7 @@
 	<id>snappymail</id>
 	<name>SnappyMail</name>
 	<summary>SnappyMail Webmail</summary>
-	<version>2.38.2</version>
+	<version>3.0.0</version>
 	<licence>agpl</licence>
 	<author>SnappyMail, RainLoop Team, Nextgen-Networks, Tab Fitts, Nathan Kinkade, Pierre-Alain Bandinelli</author>
 	<description><![CDATA[**Lightweight & fast email client.**
@@ -63,12 +63,13 @@ There, click on the link to go to the SnappyMail admin panel.
 		<lib>uuid</lib>
 		<lib>xxtea</lib>
 		<lib>zip</lib>
-		<nextcloud min-version="25" max-version="33" />
 -->
-		<nextcloud min-version="25" />
+		<nextcloud min-version="26" max-version="35"/>
 	</dependencies>
 	<settings>
+		<admin-section>OCA\SnappyMail\Settings\Section</admin-section>
 		<admin>OCA\SnappyMail\Settings\AdminSettings</admin>
+		<personal-section>OCA\SnappyMail\Settings\Section</personal-section>
 		<personal>OCA\SnappyMail\Settings\PersonalSettings</personal>
 	</settings>
 	<navigations>

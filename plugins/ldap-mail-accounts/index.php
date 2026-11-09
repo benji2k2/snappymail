@@ -12,10 +12,10 @@ class LdapMailAccountsPlugin extends AbstractPlugin
 {
 	const
 		NAME     = 'LDAP Mail Accounts',
-		VERSION  = '2.2.1',
+		VERSION  = '2.3',
 		AUTHOR   = 'cm-schl',
 		URL      = 'https://github.com/cm-sch',
-		RELEASE  = '2024-09-20',
+		RELEASE  = '2026-11-09',
 		REQUIRED = '2.36.1',
 		CATEGORY = 'Accounts',
 		DESCRIPTION = 'Add additional mail accounts the SnappyMail user has access to by a LDAP query. Basing on the work of FWest98 (https://github.com/FWest98).';
@@ -114,7 +114,8 @@ class LdapMailAccountsPlugin extends AbstractPlugin
 			\RainLoop\Plugins\Property::NewInstance(LdapMailAccountsConfig::CONFIG_PROTOCOL_VERSION)
 				->SetLabel("LDAP Protocol Version")
 				->SetType(RainLoop\Enumerations\PluginPropertyType::SELECTION)
-				->SetDefaultValue([2, 3]),
+				->SetOptions([2, 3])
+				->SetDefaultValue(3),
 
 			\RainLoop\Plugins\Property::NewInstance(LdapMailAccountsConfig::CONFIG_BIND_USER)
 				->SetLabel("LDAP Username")

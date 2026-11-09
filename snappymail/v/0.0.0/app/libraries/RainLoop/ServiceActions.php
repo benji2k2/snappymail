@@ -282,6 +282,38 @@ class ServiceActions
 		return $this->privateUpload('UploadBackground', 1);
 	}
 
+	// https://github.com/the-djmaze/snappymail/security/advisories/GHSA-xpr6-5vj6-wq26
+	private static function allowedProxyUri($uri) : bool
+	{
+		if (!\preg_match('#^https?://#i', $uri)) {
+			return false;
+		}
+		$host = \parse_url($uri, \PHP_URL_HOST);
+		if (!\is_string($host) || '' === $host) {
+			return null;
+		}
+		// Bracketed IPv6 literals (http://[::1]/): parse_url keeps the
+		// brackets, which filter_var rejects, so strip them first.
+		if (\str_starts_with($host, '[') && \str_ends_with($host, ']')) {
+			$host = \substr($host, 1, -1);
+		}
+		// Validate direct IP or resolve hostname
+		$ips = \filter_var($host, \FILTER_VALIDATE_IP) ? [$host] : \gethostbynamel($host);
+		if (!$ips || !\is_array($ips)) {
+			return false;
+		}
+		foreach ($ips as $ip) {
+			if (!\filter_var($ip, \FILTER_VALIDATE_IP, \FILTER_FLAG_NO_PRIV_RANGE | \FILTER_FLAG_NO_RES_RANGE)) {
+				return false;
+			}
+			// Explicitly reject loopback, link-local, and cloud metadata addresses
+			if (\str_starts_with($ip, '127.') || \str_starts_with($ip, '169.254.') || '::1' === $ip || '0.0.0.0' === $ip) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	public function ServiceProxyExternal() : string
 	{
 		$sData = empty($this->aPaths[1]) ? '' : $this->aPaths[1];
@@ -291,7 +323,7 @@ class ServiceActions
 		) {
 			$this->oActions->verifyCacheByKey($sData);
 			$sUrl = \MailSo\Base\Utils::UrlSafeBase64Decode($sData);
-			if (!empty($sUrl)) {
+			if (!empty($sUrl) && static::allowedProxyUri($sUrl)) {
 				\header('X-Content-Location: '.$sUrl);
 				$tmp = \tmpfile();
 				$HTTP = \SnappyMail\HTTP\Request::factory();
@@ -345,8 +377,12 @@ class ServiceActions
 					$sMethodName = 'Raw'.$sAction;
 					if (\method_exists($this->oActions, $sMethodName)) {
 						\header('X-Raw-Action: '.$sMethodName);
-						\header('Content-Security-Policy: script-src \'none\'; child-src \'none\'; object-src \'none\'');
-
+						// Raw responses carry content from the message. Besides scripts and
+						// frames, deny forms, base and everything not needed to show an
+						// image, media, a PDF or plain text.
+						\header('Content-Security-Policy: default-src \'none\'; script-src \'none\'; child-src \'none\'; '
+							. 'form-action \'none\'; base-uri \'none\'; img-src \'self\' data:; media-src \'self\'; '
+							. 'style-src \'self\' \'unsafe-inline\'; object-src \'self\'');
 						$sRawError = '';
 						$this->oActions->SetActionParams(array(
 							'RawKey' => empty($this->aPaths[3]) ? '' : $this->aPaths[3],
@@ -435,7 +471,9 @@ class ServiceActions
 		$bCacheEnabled = !$bAppDebug && $this->Config()->Get('cache', 'system_data', true);
 		$sCacheFileName = '';
 		if ($bCacheEnabled) {
-			$sCacheFileName = KeyPathHelper::PluginsJsCache($this->oActions->Plugins()->Hash()) . $sMinify;
+			$sCacheFileName = KeyPathHelper::PluginsJsCache($this->oActions->Plugins()->Hash())
+				. ($bAdmin ? 'admin' : 'user')
+				. $sMinify;
 			$this->oActions->verifyCacheByKey(\md5($sCacheFileName));
 			$sResult = $this->Cacher()->Get($sCacheFileName);
 		}

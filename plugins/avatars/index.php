@@ -30,6 +30,7 @@ class AvatarsPlugin extends \RainLoop\Plugins\AbstractPlugin
 		// https://github.com/the-djmaze/snappymail/issues/714
 		if ($this->Config()->Get('plugin', 'service', true)
 //		 || !$this->Config()->Get('plugin', 'delay', true)
+		 || $this->Config()->Get('plugin', 'contacts', false)
 		 || $this->Config()->Get('plugin', 'gravatar', false)
 		 || $this->Config()->Get('plugin', 'bimi', false)
 		 || $this->Config()->Get('plugin', 'favicon', false)
@@ -75,7 +76,8 @@ class AvatarsPlugin extends \RainLoop\Plugins\AbstractPlugin
 		}
 		if (\is_array($mFrom)) {
 			if (/*!$this->Config()->Get('plugin', 'delay', true)
-			 && */($this->Config()->Get('plugin', 'gravatar', false)
+			 && */($this->Config()->Get('plugin', 'contacts', false)
+			    || $this->Config()->Get('plugin', 'gravatar', false)
 				|| ($this->Config()->Get('plugin', 'bimi', false) && 'pass' == $mFrom['dkimStatus'])
 				|| ($this->Config()->Get('plugin', 'favicon', false) && 'pass' == $mFrom['dkimStatus'])
 			 )
@@ -157,20 +159,15 @@ class AvatarsPlugin extends \RainLoop\Plugins\AbstractPlugin
 				->SetDescription('https://wikipedia.org/wiki/Gravatar'),
 		]);
 		$aResult = array(
-			defined('RainLoop\\Enumerations\\PluginPropertyType::SELECT')
-				? \RainLoop\Plugins\Property::NewInstance('identicon')->SetLabel('Identicon')
-					->SetType(\RainLoop\Enumerations\PluginPropertyType::SELECT)
-					->SetDefaultValue([
-						['id' => '', 'name' => 'Name characters else silhouette'],
-						['id' => 'identicon', 'name' => 'Name characters else squares'],
-						['id' => 'jdenticon', 'name' => 'Triangles shape']
-					])
-					->SetDescription('https://wikipedia.org/wiki/Identicon')
-				: \RainLoop\Plugins\Property::NewInstance('identicon')->SetLabel('Identicon')
-					->SetType(\RainLoop\Enumerations\PluginPropertyType::SELECTION)
-					->SetDefaultValue(['','identicon','jdenticon'])
-					->SetDescription('empty = default, identicon = squares, jdenticon = Triangles shape')
-				,
+			\RainLoop\Plugins\Property::NewInstance('identicon')->SetLabel('Identicon')
+				->SetType(\RainLoop\Enumerations\PluginPropertyType::SELECT)
+				->SetOptions([
+					['id' => '', 'name' => 'Name characters else silhouette'],
+					['id' => 'identicon', 'name' => 'Name characters else squares'],
+					['id' => 'jdenticon', 'name' => 'Triangles shape']
+				])
+				->SetDefaultValue('')
+				->SetDescription('https://wikipedia.org/wiki/Identicon'),
 			\RainLoop\Plugins\Property::NewInstance('service')->SetLabel('Preload valid domain icons')
 				->SetType(\RainLoop\Enumerations\PluginPropertyType::BOOL)
 				->SetAllowedInJs(true)

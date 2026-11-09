@@ -137,8 +137,8 @@ class Actions
 
 			$this->logWrite(
 				'[SM:' . APP_VERSION . '][IP:'
-				. $oHttp->GetClientIp($this->oConfig->Get('labs', 'http_client_ip_check_proxy', false))
-				. '][PID:' . (\MailSo\Base\Utils::FunctionCallable('getmypid') ? \getmypid() : 'unknown')
+				. $oHttp->GetClientIp()
+				. '][PID:' . (\function_exists('getmypid') ? \getmypid() : 'unknown')
 				. '][' . \MailSo\Base\Http::GetServer('SERVER_SOFTWARE', '~')
 				. '][' . \PHP_SAPI
 				. '][Streams:' . \implode(',', \stream_get_transports())
@@ -286,7 +286,7 @@ class Actions
 		if (false !== \strpos($sLine, '{request:')) {
 			if (false !== \strpos($sLine, '{request:ip}')) {
 				$sLine = \str_replace('{request:ip}',
-					$this->Http()->GetClientIp($this->oConfig->Get('labs', 'http_client_ip_check_proxy', false)),
+					$this->Http()->GetClientIp(),
 					$sLine);
 			}
 
@@ -313,7 +313,7 @@ class Actions
 
 			if (false !== \strpos($sLine, '{user:ip}')) {
 				$sLine = \str_replace('{user:ip}',
-					$this->Http()->GetClientIp($this->oConfig->Get('labs', 'http_client_ip_check_proxy', false)),
+					$this->Http()->GetClientIp(),
 					$sLine);
 			}
 
@@ -540,7 +540,7 @@ class Actions
 			$this->oLoggerAuth->Write($this->compileLogParams($sLine, $oAccount, $aAdditionalParams), \LOG_WARNING);
 		}
 		if (($this->oConfig->Get('logs', 'auth_logging', false) || $this->oConfig->Get('logs', 'auth_syslog', false))
-		 && \openlog('snappymail', 0, \LOG_AUTHPRIV)) {
+		 && \openlog(\SnappyMail\Log::ident(), 0, \LOG_AUTHPRIV)) {
 			\syslog(\LOG_ERR, $this->compileLogParams(
 				$admin ? 'Admin Auth failed: ip={request:ip} user={user:login}' : 'Auth failed: ip={request:ip} user={imap:login}',
 				$oAccount, $aAdditionalParams

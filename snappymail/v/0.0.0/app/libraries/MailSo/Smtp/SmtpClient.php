@@ -71,22 +71,31 @@ class SmtpClient extends \MailSo\Net\NetClient
 
 	public static function EhloHelper() : string
 	{
-		$sEhloHost = empty($_SERVER['SERVER_NAME']) ? '' : \trim($_SERVER['SERVER_NAME']);
-		if (empty($sEhloHost)) {
-			$sEhloHost = empty($_SERVER['HTTP_HOST']) ? '' : \trim($_SERVER['HTTP_HOST']);
+		// RFC 5321 4.1.1.1: EHLO argument must be a domain name or an address literal.
+		// Skip invalid values like nginx catch-all `server_name _;`
+		$aCandidates = [
+			$_SERVER['SERVER_NAME'] ?? '',
+			$_SERVER['HTTP_HOST'] ?? '',
+			\function_exists('gethostname') ? (\gethostname() ?: '') : ''
+		];
+		foreach ($aCandidates as $sEhloHost) {
+			$sEhloHost = \trim((string) $sEhloHost);
+			if (\filter_var($sEhloHost, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+				return '[IPv6:'.$sEhloHost.']';
+			}
+			$sEhloHost = \trim(\preg_replace('/:\d+$/', '', $sEhloHost));
+			if (\filter_var($sEhloHost, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4)) {
+				return '['.$sEhloHost.']';
+			}
+			if (\filter_var($sEhloHost, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+				return '[IPv6:'.$sEhloHost.']';
+			}
+			$sEhloHost = \idn_to_ascii($sEhloHost);
+			if (\preg_match('/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i', $sEhloHost)) {
+				return $sEhloHost;
+			}
 		}
-
-		if (empty($sEhloHost)) {
-			$sEhloHost = \function_exists('gethostname') ? \gethostname() : 'localhost';
-		}
-
-		$sEhloHost = \trim(\preg_replace('/:\d+$/', '', \trim($sEhloHost)));
-
-		if (\preg_match('/^\d+\.\d+\.\d+\.\d+$/', $sEhloHost)) {
-			$sEhloHost = '['.$sEhloHost.']';
-		}
-
-		return empty($sEhloHost) ? 'localhost' : $sEhloHost;
+		return 'localhost';
 	}
 
 	/**
@@ -244,11 +253,22 @@ class SmtpClient extends \MailSo\Net\NetClient
 	}
 
 	/**
+	 * RFC 3461 section 4: xchar is any ASCII 33-126 except "+" and "=",
+	 * anything else becomes "+" followed by two hex digits.
+	 */
+	private static function xtext(string $sValue): string
+	{
+		return \preg_replace_callback('/[^\x21-\x2A\x2C-\x3C\x3E-\x7E]/',
+			fn($aMatch) => \sprintf('+%02X', \ord($aMatch[0])),
+			$sValue);
+	}
+
+	/**
 	 * @throws \MailSo\RuntimeException
 	 * @throws \MailSo\Net\Exceptions\*
 	 * @throws \MailSo\Smtp\Exceptions\*
 	 */
-	public function MailFrom(string $sFrom, int $iSizeIfSupported = 0, bool $bDsn = false, bool $bRequireTLS = false) : self
+	public function MailFrom(string $sFrom, int $iSizeIfSupported = 0, bool $bDsn = false, bool $bRequireTLS = false, string $sEnvId = ''): self
 	{
 //		$sFrom = IDN::emailToAscii($sFrom);
 		$sCmd = "FROM:<{$sFrom}>";
@@ -263,8 +283,20 @@ class SmtpClient extends \MailSo\Net\NetClient
 		}
 
 		// RFC 3461
-		if ($bDsn && $this->hasCapability('DSN')) {
-			$sCmd .= ' RET=HDRS';
+		if ($bDsn) {
+			if ($this->hasCapability('DSN')) {
+				$sCmd .= ' RET=HDRS';
+				// The envelope id is echoed back in the notification, which is the
+				// only way to tie one to the message that caused it.
+				if (\strlen($sEnvId)) {
+					$sEnvId = static::xtext($sEnvId);
+					if (100 >= \strlen($sEnvId)) {
+						$sCmd .= ' ENVID=' . $sEnvId;
+					}
+				}
+			} else {
+				$this->writeLog('DSN was requested but the server does not advertise DSN, sending without it', \LOG_WARNING);
+			}
 		}
 
 		// RFC 6152
@@ -305,7 +337,7 @@ class SmtpClient extends \MailSo\Net\NetClient
 		$sCmd = 'TO:<'.$sTo.'>';
 
 		if ($bDsn && $this->hasCapability('DSN')) {
-			$sCmd .= ' NOTIFY=SUCCESS,FAILURE';
+			$sCmd .= ' NOTIFY=SUCCESS,FAILURE,DELAY';
 		}
 
 		$this->sendRequestWithCheck("RCPT {$sCmd}", [250, 251], "Failed to add recipient '{$sTo}'");

@@ -7,8 +7,9 @@ const
 
 	turndown = new TurndownService(),
 
-	htmlre = /[&<>"']/g,
-	httpre = /^(https?:)?\/\//i,
+	html_re = /[&<>"']/g,
+	http_re = /^(https?:)?\/\//i,
+	schemes_re = /^(http|https|geo|irc|nntp|mailto|sms|tel|intent|itms-apps|msteams|slack|spotify|steam|zoommtg):/i,
 	htmlmap = {
 		'&': '&amp;',
 		'<': '&lt;',
@@ -218,7 +219,7 @@ export const
 	 * @param {string} text
 	 * @returns {string}
 	 */
-	encodeHtml = text => (text?.toString?.() || '' + text).replace(htmlre, m => htmlmap[m]),
+	encodeHtml = text => (text?.toString?.() || '' + text).replace(html_re, m => htmlmap[m]),
 
 	/**
 	 * Clears the Message Html for viewing
@@ -283,7 +284,11 @@ export const
 				// hr
 				'noshade',
 				// img
-				'hspace', 'sizes', 'srcset', 'vspace',
+				// srcset and sizes are not allowed: only src goes through the
+				// remote content consent and proxy rewrite below, so a srcset
+				// URL loaded without asking (directly, or relative to this
+				// origin through ?/ProxyExternal as a read receipt).
+				'hspace', 'vspace',
 				// meter
 				'low', 'high', 'optimum', 'value',
 				// ol
@@ -461,6 +466,9 @@ export const
 				if (!/^([a-z]+):/i.test(value)) {
 					setAttribute('data-x-href-broken', value);
 					delAttribute('href');
+				} else if (!schemes_re.test(value)) {
+					setAttribute('data-x-href-disallowed', value);
+					delAttribute('href');
 				} else {
 					oElement.href = stripTracking(value);
 					if (oElement.href != value) {
@@ -530,7 +538,7 @@ export const
 							setAttribute('data-x-src-hidden', value);
 	//						result.tracking = true;
 						}
-						else if (httpre.test(value))
+						else if (http_re.test(value))
 						{
 							let src = stripTracking(value);
 							if (src != value) {
@@ -569,6 +577,19 @@ export const
 				oStyle.color = delAttribute('color');
 			}
 
+			// Only the three properties below go through the remote content and
+			// cid: handling. A url() in any other property (border-image-source,
+			// mask-image, filter, ...) would load without consent, a relative one
+			// through ?/ProxyExternal on this origin, so drop those outright.
+			let i = oStyle.length;
+			while (i--) {
+				const property = oStyle[i];
+				if (!['background-image', 'list-style-image', 'content'].includes(property)
+				 && /url\s*\(/i.test(oStyle.getPropertyValue(property))) {
+					oStyle.removeProperty(property);
+				}
+			}
+
 			if (!skipStyle) {
 /*
 				if ('fixed' === oStyle.position) {
@@ -597,7 +618,7 @@ export const
 									attachment.isInline(true);
 									attachment.isLinked(true);
 								}
-							} else if (httpre.test(lowerUrl)) {
+							} else if (http_re.test(lowerUrl)) {
 								result.hasExternals = true;
 								urls_remote.push([property, found]);
 							} else if (lowerUrl.startsWith('data:image/')) {

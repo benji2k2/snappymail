@@ -43,7 +43,8 @@ class ChangePasswordDriverPDO
 				->SetDefaultValue('UPDATE table SET password = :newpass WHERE (domain = :domain AND username = :username) OR loginname = :login_name'),
 			\RainLoop\Plugins\Property::NewInstance('pdo_encrypt')->SetLabel('Encryption')
 				->SetType(\RainLoop\Enumerations\PluginPropertyType::SELECTION)
-				->SetDefaultValue(array('none', 'bcrypt', 'Argon2i', 'Argon2id', 'SHA256-CRYPT', 'SHA512-CRYPT'))
+				->SetOptions(array('none', 'bcrypt', 'Argon2i', 'Argon2id', 'SHA256-CRYPT', 'SHA512-CRYPT'))
+				->SetDefaultValue('bcrypt')
 				->SetDescription('In what way do you want the passwords to be encrypted?'),
 			\RainLoop\Plugins\Property::NewInstance('pdo_encryptprefix')->SetLabel('Encrypt prefix')
 				->SetDescription('Optional encrypted password prefix, like {ARGON2I} or {BLF-CRYPT} or {SHA512-CRYPT}'),
@@ -70,8 +71,13 @@ class ChangePasswordDriverPDO
 				\PDO::ATTR_ERRMODE           => \PDO::ERRMODE_EXCEPTION,
 			);
 			if ($this->oConfig->Get('plugin', 'pdo_mysql_ssl', false)) {
-				$pdo_attr[\PDO::MYSQL_ATTR_SSL_CA]                 = $this->oConfig->Get('plugin', 'pdo_mysql_ssl_ca', '');
-				$pdo_attr[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = $this->oConfig->Get('plugin', 'pdo_mysql_ssl_verify', true);
+				if (!\class_exists('PDO\\Mysql', false)) {
+					require \SNAPPYMAIL_LIBRARIES_PATH . '/polyfill/pdo.php';
+				}
+				$pdo_attr[\PDO\Mysql::ATTR_SSL_CA] = $this->oConfig->Get('plugin', 'pdo_mysql_ssl_ca', '');
+				if (\defined('PDO\\Mysql::ATTR_SSL_VERIFY_SERVER_CERT')) {
+					$pdo_attr[\PDO\Mysql::ATTR_SSL_VERIFY_SERVER_CERT] = $this->oConfig->Get('plugin', 'pdo_mysql_ssl_verify', true);
+				}
 			}
 
 			$conn = new \PDO(
@@ -91,7 +97,7 @@ class ChangePasswordDriverPDO
 				':newpass' => $encrypt_prefix . \ChangePasswordPlugin::encrypt($encrypt, $oNewPassword),
 				':domain' => \MailSo\Base\Utils::getEmailAddressDomain($sEmail),
 				':username' => \MailSo\Base\Utils::getEmailAddressLocalPart($sEmail),
-				':login_name' => $oAccount->IncLogin()
+				':login_name' => $oAccount->ImapUser()
 			);
 
 			$sql = $this->oConfig->Get('plugin', 'pdo_sql', '');

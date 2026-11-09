@@ -797,8 +797,11 @@ trait Messages
 			$oAccount->SmtpConnectAndLogin($this->Plugins(), $oSmtpClient);
 
 			if ($oSmtpClient->Settings->usePhpMail) {
-				if (!$sFrom || !\MailSo\Base\Utils::FunctionCallable('mail')) {
+				if (!$sFrom || !\function_exists('mail')) {
 					throw new ClientException(Notifications::CantSendMessage);
+				}
+				if ($bDsn) {
+					$this->Logger()->Write('DSN was requested but PHP mail() cannot request one', \LOG_WARNING);
 				}
 				$oToCollection = $oMessage->GetTo();
 				if (!$oToCollection) {
@@ -839,7 +842,7 @@ trait Messages
 				}
 
 				if (!empty($sFrom)) {
-					$oSmtpClient->MailFrom($sFrom, 0, $bDsn, $bRequireTLS);
+					$oSmtpClient->MailFrom($sFrom, 0, $bDsn, $bRequireTLS, ($bDsn ? $oMessage->MessageId() : ''));
 				}
 
 				foreach ($oRcpt as /* @var $oEmail \MailSo\Mime\Email */ $oEmail) {
@@ -1143,7 +1146,7 @@ trait Messages
 
 					$oMessage->Attachments()->append(
 						new \MailSo\Mime\Attachment($rResource, $sFileName, $iFileSize, $bIsInline,
-							\in_array(trim(trim($sCID), '<>'), $aFoundCids),
+							\in_array(\trim(\trim($sCID), '<>'), $aFoundCids),
 							$sCID, array(), $sContentLocation, $sMimeType
 						)
 					);

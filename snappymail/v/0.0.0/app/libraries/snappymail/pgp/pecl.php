@@ -2,9 +2,9 @@
 
 namespace SnappyMail\PGP;
 
-defined('GNUPG_SIG_MODE_NORMAL') || define('GNUPG_SIG_MODE_NORMAL', 0);
-defined('GNUPG_SIG_MODE_DETACH') || define('GNUPG_SIG_MODE_DETACH', 1);
-defined('GNUPG_SIG_MODE_CLEAR') || define('GNUPG_SIG_MODE_CLEAR', 2);
+\defined('GNUPG_SIG_MODE_NORMAL') || \define('GNUPG_SIG_MODE_NORMAL', 0);
+\defined('GNUPG_SIG_MODE_DETACH') || \define('GNUPG_SIG_MODE_DETACH', 1);
+\defined('GNUPG_SIG_MODE_CLEAR') || \define('GNUPG_SIG_MODE_CLEAR', 2);
 
 use SnappyMail\GPG\PGP as GPG;
 use SnappyMail\SensitiveString;
@@ -285,7 +285,7 @@ class PECL implements \SnappyMail\PGP\PGPInterface
 
 	public function keyInfo(string $pattern, bool $private = false): array
 	{
-		return $this->GnuPG->keyinfo($pattern, $private ? 1 : 0);
+		return $this->GnuPG->keyInfo($pattern, $private ? 1 : 0);
 	}
 
 	/**
@@ -298,13 +298,13 @@ class PECL implements \SnappyMail\PGP\PGPInterface
 			'private' => []
 		];
 		// Public
-		foreach (($this->GnuPG->keyinfo($pattern) ?: []) as $key) {
+		foreach (($this->GnuPG->keyInfo($pattern) ?: []) as $key) {
 			$key['can_verify'] = $key['can_sign'];
 			unset($key['can_sign']);
 			$keys['public'][] = $key;
 		}
 		// Private, read https://github.com/php-gnupg/php-gnupg/issues/5
-		foreach (($this->GnuPG->keyinfo($pattern, 1) ?: []) as $key) {
+		foreach (($this->GnuPG->keyInfo($pattern, 1) ?: []) as $key) {
 			$key['can_decrypt'] = $key['can_encrypt'];
 			unset($key['can_encrypt']);
 			$keys['private'][] = $key;
