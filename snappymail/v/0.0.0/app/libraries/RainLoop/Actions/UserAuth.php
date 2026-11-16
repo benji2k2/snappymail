@@ -132,8 +132,7 @@ trait UserAuth
 			'email' => $sNewEmail ?: $sEmail,
 			'domain' => $oDomain,
 			'imapUser' => $sNewImapUser ?: $sImapUser,
-			'smtpUser' => $sNewSmtpUser ?: $sSmtpUser,
-			'pass' => $oPassword
+			'smtpUser' => $sNewSmtpUser ?: $sSmtpUser
 		];
 	}
 
@@ -145,7 +144,7 @@ trait UserAuth
 	{
 		$aCredentials = $this->resolveLoginCredentials(new Email($sEmail), $oPassword);
 
-		if (!\str_contains($aCredentials['email'], '@') || !\strlen($oPassword)) {
+		if (!\str_contains($aCredentials['email'], '@') || !$oPassword->length()) {
 			throw new ClientException(Notifications::InvalidInputArgument);
 		}
 
@@ -481,6 +480,8 @@ trait UserAuth
 			} else {
 				throw new ClientException(Notifications::AuthError, $oException);
 			}
+		} catch (\MailSo\Imap\Exceptions\NegativeResponseException $oException) {
+			throw new ClientException(Notifications::MailServerError, $oException);
 		} catch (\Throwable $oException) {
 			throw new ClientException(Notifications::AuthError, $oException);
 		}

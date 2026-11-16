@@ -145,8 +145,11 @@ foreach (glob(ROOT_DIR . '/plugins/*', GLOB_NOSORT | GLOB_ONLYDIR) as $dir) {
 			$tgz_destination = PLUGINS_DEST_DIR . "/{$name}-{$version}.tgz";
 			@unlink($tgz_destination);
 			@unlink("{$tar_destination}.gz");
-			$tar = new \SnappyMail\TAR($tgz_destination);
-//			$tar = new PharData($tar_destination);
+			if (isset($options['phar'])) {
+				$tar = new PharData($tar_destination);
+			} else {
+				$tar = new \SnappyMail\TAR($tgz_destination);
+			}
 			$tar->buildFromDirectory('./plugins/', '/' . \preg_quote("./plugins/{$name}/", '/') . '((?!\.bak).)*$/');
 			if ($tar instanceof PharData) {
 /*
@@ -176,7 +179,7 @@ foreach (glob(ROOT_DIR . '/plugins/*', GLOB_NOSORT | GLOB_ONLYDIR) as $dir) {
 */
 			if (isset($options['sign'])) {
 				$arg = escapeshellarg($tgz_destination);
-				passthru('gpg --local-user 1016E47079145542F8BA133548208BA13290F3EB --armor --detach-sign '.$arg, $return_var);
+				passthru('gpg --local-user ' . SIGNING_KEY . ' --armor --detach-sign ' . $arg, $return_var);
 				$manifest_item['pgp_sig'] = trim(preg_replace('/-----(BEGIN|END) PGP SIGNATURE-----/', '', file_get_contents($tgz_destination.'.asc')));
 
 				$signature = '';

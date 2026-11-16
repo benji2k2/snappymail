@@ -67,7 +67,17 @@ const
 		message && MessagelistUserStore.setAction(message.folder, action, [message]);
 	},
 
-	fetchRaw = url => rl.fetch(url).then(response => response.ok && response.text());
+	fetchRaw = url => rl.fetch(url).then(response => response.ok && response.text()),
+
+	/*
+	 * The smime.p7m is the envelope the message arrived in rather than something
+	 * somebody attached, so listing it is noise, and before decryption it is the
+	 * only thing in the list. Conditional on the message being encrypted, so a
+	 * .p7m genuinely attached to ordinary mail is still shown.
+	 */
+	attachmentListed = item =>
+		(SettingsUserStore.listInlineAttachments() || !item.isLinked())
+		&& !(currentMessage()?.smimeEncrypted() && (item.mimeType || '').toLowerCase().includes('pkcs7'));
 
 export class MailMessageView extends AbstractViewRight {
 	constructor() {
@@ -185,11 +195,9 @@ export class MailMessageView extends AbstractViewRight {
 				&& !currentMessage()?.flags().includes('$mdnsent')
 				&& !currentMessage()?.flags().includes('\\answered'),
 
-			listAttachments: () => currentMessage()?.attachments()
-				.filter(item => SettingsUserStore.listInlineAttachments() || !item.isLinked()),
+			listAttachments: () => currentMessage()?.attachments().filter(attachmentListed),
 //			hasAttachments: () => currentMessage()?.attachments()?.length,
-			hasAttachments: () => currentMessage()?.attachments()
-				.some(item => SettingsUserStore.listInlineAttachments() || !item.isLinked()),
+			hasAttachments: () => currentMessage()?.attachments().some(attachmentListed),
 //			listInline: () => currentMessage()?.attachments().filter(item => item.isLinked()),
 //			hasInline: () => currentMessage()?.attachments().some(item => item.isLinked()),
 
@@ -198,7 +206,7 @@ export class MailMessageView extends AbstractViewRight {
 			dkimIcon: () => {
 				switch (this.dkimData()[0]) {
 					case 'none':
-						return '🚫︎';
+						return '︎'; // 🚫
 					case 'pass':
 						return '✔';
 					default:
@@ -206,7 +214,7 @@ export class MailMessageView extends AbstractViewRight {
 				}
 			},
 			dkimIconClass: () => 'pass' === this.dkimData()[0] ? 'iconcolor-green' : 'iconcolor-red',
-			dkimTitle:() => {
+			dkimTitle: () => {
 				const dkim = this.dkimData();
 				return dkim[0] ? dkim[2] || 'DKIM: ' + dkim[0] : '';
 			},
@@ -214,7 +222,7 @@ export class MailMessageView extends AbstractViewRight {
 			spfIcon: () => {
 				switch (this.spfData()[0]) {
 					case 'none':
-						return '🚫︎';
+						return '︎'; // 🚫
 					case 'pass':
 						return '✔';
 					default:
@@ -230,7 +238,7 @@ export class MailMessageView extends AbstractViewRight {
 			dmarcIcon: () => {
 				switch (this.dmarcData()[0]) {
 					case 'none':
-						return '🚫︎';
+						return '︎'; // 🚫
 					case 'pass':
 						return '✔';
 					default:
@@ -267,6 +275,7 @@ export class MailMessageView extends AbstractViewRight {
 					this.dkimData(message.dkim[0] || ['none', '', '']);
 					this.spfData(message.spf[0] || ['none', '', '']);
 					this.dmarcData(message.dmarc[0] || ['none', '', '']);
+					this.localDelivery(message.headers().isLocalDelivery());
 					this.nowTracking(false);
 				} else {
 					MessagelistUserStore.selectedMessage(null);
