@@ -53,7 +53,7 @@ export class Selector {
 			itemSelected = item => {
 				if (koList.hasChecked()) {
 					item || this.oCallbacks.ItemSelect?.(null);
-				} else if (item) {
+				} else {
 					this.oCallbacks.ItemSelect?.(item);
 				}
 			},
@@ -69,13 +69,16 @@ export class Selector {
 		});
 
 		let selectedItemUseCallback = true;
-
+		let prevSelected;
 		koSelectedItem.subscribe(item => {
-			if (item) {
-//				koList.forEach(subItem => subItem.checked(false));
-				selectedItemUseCallback && itemSelectedThrottle(item);
-			} else {
-				selectedItemUseCallback && itemSelected();
+			if (prevSelected != item) {
+				if (item) {
+//					koList.forEach(subItem => subItem.checked(false));
+					selectedItemUseCallback && itemSelectedThrottle(item);
+				} else {
+					selectedItemUseCallback && itemSelected();
+				}
+				prevSelected = item;
 			}
 		});
 
